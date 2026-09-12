@@ -1,0 +1,15 @@
+node_modules/
+.wrangler/
+.dev.vars
+*.backup.json
+accounts.sql
+test-output/
+original/
+prepare.py
+ILD-Internal Audit.html
+CLAUDE.md
+CLAUDE_CODE_QUICK_START.md
+HANDOFF.md
+backup.sql
+backups/
+private/

@@ -1,0 +1,69 @@
+import {createRequire} from 'node:module';
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const require=createRequire(import.meta.url);
+const {chromium}=require(process.env.AUDIT_PLAYWRIGHT_PATH||'C:/Users/BinhDang/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
+let state={data:null,version:null},count=0;
+const errors=[];
+async function device(role='admin'){
+  const context=await browser.newContext();
+  await context.addInitScript(()=>{
+    sessionStorage.setItem('auditToken','test');
+    window.WebSocket=class {close(){} };
+  });
+  await context.route('**/*',async route=>{
+    const req=route.request(),url=new URL(req.url());
+    const json=body=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+    if(url.pathname==='/api/me')return json({user:{id:role,code:role,name:role==='auditor'?'Test Auditor':role==='auditee'?'Test PIC':'Admin',admin:role==='admin',role}});
+    if(url.pathname==='/api/state'){
+      if(req.method()==='GET')return json(state);
+      const body=req.postDataJSON();
+      if(body.baseVersion!==state.version)return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Conflict'})});
+      state={data:body.data,version:String(++count)};return json({version:state.version});
+    }
+    if(url.pathname.endsWith('sw.js'))return route.fulfill({status:404,body:''});
+    return route.fulfill({status:200,contentType:'text/html',body:html});
+  });
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('https://audit.test');
+  await page.waitForFunction(()=>CLOUD.ready&&!CLOUD.busy&&CLOUD.version!==null);
+  return {context,page};
+}
+try{
+  const a=await device(),b=await device();
+  await a.page.evaluate(async()=>{RECORDS.push({id:'test-a',action:'old',pic:'A',updatedAt:1});await saveRecords();await cloudSync();});
+  await b.page.evaluate(async()=>{RECORDS.push({id:'test-b',action:'B',updatedAt:1});await saveRecords();await cloudSync();});
+  await a.page.evaluate(()=>cloudSync());
+  assert.equal(state.data.records.length,2);
+  await a.page.evaluate(async()=>{RECORDS.find(r=>r.id==='test-a').action='from A';await saveRecords();await cloudSync();});
+  await b.page.evaluate(async()=>{RECORDS.find(r=>r.id==='test-a').pic='from B';await saveRecords();await cloudSync();});
+  assert.equal(state.data.records.find(r=>r.id==='test-a').action,'from A');
+  assert.equal(state.data.records.find(r=>r.id==='test-a').pic,'from B');
+  await a.page.evaluate(()=>cloudSync());
+  await a.page.evaluate(async()=>{RECORDS.find(r=>r.id==='test-a').action='conflict A';await saveRecords();await cloudSync();});
+  await b.page.evaluate(async()=>{RECORDS.find(r=>r.id==='test-a').action='conflict B';await saveRecords();await cloudSync();});
+  assert.ok(await b.page.evaluate(()=>CLOUD.conflicts.includes('/records/test-a/action')));
+  b.page.on('dialog',d=>d.accept());
+  await b.page.evaluate(async()=>{await cloudResolve('local');await cloudSync();});
+  assert.equal(state.data.records.find(r=>r.id==='test-a').action,'conflict B');
+  await a.context.setOffline(true);
+  await a.page.evaluate(async()=>{RECORDS.push({id:'offline',action:'keep me',updatedAt:1});await saveRecords();});
+  await a.page.reload();
+  await a.page.waitForFunction(()=>CLOUD.ready);
+  assert.ok(await a.page.evaluate(()=>RECORDS.some(r=>r.id==='offline')));
+  await a.context.setOffline(false);
+  await a.page.evaluate(()=>cloudSync());
+  await a.page.waitForFunction(()=>!CLOUD.busy);
+  assert.ok(state.data.records.some(r=>r.id==='offline'));
+  const auditor=await device('auditor'),pic=await device('auditee');
+  assert.equal(await auditor.page.evaluate(()=>CURRENT_USER.role),'auditor');
+  assert.equal(await auditor.page.evaluate(()=>CH.auditor),'Test Auditor');
+  assert.equal(await auditor.page.locator('#cloudRole').textContent(),'· Auditor');
+  assert.equal(await pic.page.evaluate(()=>isAdmin()),false);
+  assert.equal(await pic.page.locator('#cloudRole').textContent(),'· PIC');
+  await b.page.screenshot({path:new URL('../test-output/browser.png',import.meta.url).pathname.replace(/^\/([A-Z]:)/,'$1'),fullPage:true});
+  assert.deepEqual(errors,[]);
+  console.log('PASS: two devices, disjoint edits, conflict resolution, offline reload, pending upload, Auditor/PIC identity; no browser errors.');
+}finally{await browser.close();}

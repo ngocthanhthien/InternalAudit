@@ -4313,6 +4313,13 @@ async function cloudBoot(){
     if(!confirm('Cập nhật màn hình từ dữ liệu đã đồng bộ? Hãy lưu các ô đang nhập trước.'))return;
     renderActive();document.getElementById('cloudRefresh').hidden=true;
   };
+  if(location.hostname==='ngocthanhthien.github.io'){
+    CLOUD.github=true;
+    panel.insertAdjacentHTML('afterbegin','<p><strong>App đã chuyển sang Cloudflare.</strong> <a href="https://ild-internal-audit-api.dangthanhbinh53.workers.dev">Mở Internal Audit online</a>. Nếu đã lưu dữ liệu tại địa chỉ GitHub này, hãy bấm <b>Sao lưu JSON</b> trước rồi nhập vào app mới.</p>');
+    cloudStatus('Địa chỉ GitHub chỉ dùng để chuyển dữ liệu cũ; đồng bộ online tại Cloudflare.');
+    document.getElementById('cloudNow').disabled=true;
+    return;
+  }
   CLOUD.token=sessionStorage.getItem('auditToken')||'';
   if(CLOUD.token){
     try{cloudIdentity((await cloudRequest('me')).user);cloudSocket();}catch{CLOUD.token='';cloudStatus('Cần đăng nhập để đồng bộ · dữ liệu trên máy được giữ');}
@@ -4339,7 +4346,7 @@ async function boot(){
   switchTab("dash");
   updateBadges();
   await cloudBoot(); applyUserUI(); renderActive();
-  if(!CLOUD.token) $("#loginOverlay").style.display="flex";
+  if(!CLOUD.token && !CLOUD.github) $("#loginOverlay").style.display="flex";
 }
 document.addEventListener("DOMContentLoaded", ()=>boot().catch(e=>{
   const notice=document.createElement("div");notice.style="position:fixed;inset:0;background:white;z-index:99999;padding:40px";
