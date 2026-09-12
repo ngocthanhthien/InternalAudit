@@ -16,13 +16,15 @@ Bản chuyển đổi từ `ILD-Internal Audit.html`. Frontend: `index.html`. Gi
 
 ## Tài khoản — Admin / Auditor / PIC như app cũ
 
+Đăng nhập hai bước: **QA** chỉ mở danh sách người dùng; tiếp theo chọn **Admin / Auditor / PIC** và nhập mật khẩu của người đó. Token QA không được đọc/ghi dữ liệu đánh giá hoặc quản lý tài khoản. Quyền thực tế lấy từ bảng `members`, không lấy từ tài khoản QA ở bảng `users`. Các phiên đăng nhập từ bản một bước sẽ cần đăng nhập lại.
+
 - `admin`: cấu hình, danh mục, phê duyệt, dữ liệu đánh giá.
 - `auditor` (Auditor): nhập đánh giá/Finding, tạo request Verification, cập nhật Action/PIC/Due Date/Remarks và gửi Pending. Tên auditor được điền sẵn khi đăng nhập. Chỉ Admin sửa nội dung đánh giá đã lưu, phê duyệt, Done, mở lại/xóa dữ liệu và quản lý danh mục.
 - `auditee` (PIC): giữ quyền thao tác không-Admin giống app cũ, gồm tạo request/Finding, nhập đánh giá và cập nhật/gửi CAPA. Giao diện hiển thị **PIC**; công cụ tạo tài khoản chấp nhận tên vai trò `pic` và lưu thành `auditee` để tương thích mã cũ.
 
 App cũ chưa giới hạn mỗi PIC chỉ được sửa dữ liệu của riêng mình; bản chuyển đổi giữ nguyên phạm vi đó. Auditor/PIC không được sửa bản ghi Done hoặc tự mở lại. Đánh dấu Verification hoàn tất phải đi kèm kết quả chấm điểm mới; duyệt/lên lịch/mở lại Verification vẫn thuộc Admin. Quyền được đọc từ database ở mỗi API, không tin trường admin/role do trình duyệt gửi lên.
 
-Danh mục Auditor/PIC và tài khoản đăng nhập là hai dữ liệu riêng. Cột Password cũ không dùng để tạo tài khoản cloud; không nhập mật khẩu vào file Excel. Tên hiển thị tài khoản auditor nên trùng tên trong danh mục để lựa chọn auditor có ý nghĩa.
+Danh mục Auditor/PIC và tài khoản đăng nhập là hai dữ liệu riêng. Trong **Personnel → Tài khoản nội bộ**, Admin có thể nhập username từ JSON cũ hoặc tạo/cập nhật từng tài khoản. Nhập JSON áp dụng mật khẩu tạm theo nhóm được cấu hình riêng ở D1, không mang mật khẩu plaintext vào dữ liệu đánh giá. Để trống mật khẩu khi tạo Auditor/PIC sẽ dùng mật khẩu theo nhóm; Admin phải nhập mật khẩu riêng. Không có tên PIC thì không tạo username giả. Tên hiển thị auditor nên trùng danh mục.
 
 Ví dụ tạo tài khoản: `python provision-user.py auditor01 "Tên Auditor trong danh mục" auditor` hoặc `python provision-user.py pic01 "Tên PIC trong danh mục" pic`. Tài khoản Admin dùng tham số `admin`. Mật khẩu mới được nhập ẩn trên máy, không cần gửi qua chat.
 
@@ -36,7 +38,7 @@ Nếu đã tạo database theo bản sơ bộ `editor/viewer`, sao lưu trước
 4. Tạo D1 riêng: `npx wrangler d1 create ild-internal-audit`. Điền database_id trả về vào `wrangler.toml`. Không dùng database của DOR/WOR.
 5. Tạo bảng: `npx wrangler d1 execute ild-internal-audit --remote --file=schema.sql`.
 6. Đặt khóa bí mật ngẫu nhiên tối thiểu 32 ký tự qua `npx wrangler secret put AUTH_SECRET`. Không đưa khóa vào HTML, GitHub hoặc wrangler.toml.
-7. Tạo tài khoản đầu tiên: `python provision-user.py Admin "Tên quản trị" admin`. Nhập mật khẩu theo yêu cầu, công cụ ghi SQL vào `accounts.sql` (git-ignored). Áp dụng bằng `npx wrangler d1 execute ild-internal-audit --remote --file=accounts.sql`. Mỗi file chỉ áp dụng một lần; lưu hoặc làm trống file sau khi áp dụng trước khi thêm tài khoản tiếp theo.
+7. Khi cài mới: tạo cửa vào bằng `python provision-user.py QA QA admin --gate`, và tạo tài khoản Admin nội bộ bằng `python provision-user.py Admin "Tên quản trị" admin`. Công cụ ghi SQL vào `accounts.sql` (git-ignored). Áp dụng bằng `npx wrangler d1 execute ild-internal-audit --remote --file=accounts.sql`. Mỗi file chỉ áp dụng một lần. Với database đang dùng bản một bước, chỉ áp dụng `migrations/002-two-stage-login.sql` rồi chuyển tài khoản nội bộ; tài khoản QA hiện tại được giữ nguyên.
 8. Chạy kiểm thử `npm test` và kiểm tra cấu hình bằng `npx wrangler deploy --dry-run` trước khi triển khai.
 9. Deploy bằng `npx wrangler deploy`. Mở URL Worker trả về, đăng nhập admin để khởi tạo dữ liệu. Website và API cùng origin; không cần cấu hình CORS nếu không dùng domain khác.
 10. Có thể kết nối repo ở Cloudflare Workers Builds: build command `python build.py`, deploy command `npx wrangler deploy`. Nếu môi trường build không có Python, build local rồi commit cả `public/index.html`; bỏ build command. `public` là thư mục duy nhất được phục vụ công khai.

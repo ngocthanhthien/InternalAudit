@@ -1,5 +1,5 @@
 /* IndexedDB journal is the source of truth until the server acknowledges a version. */
-const CLOUD={ready:false,busy:false,token:'',base:null,version:null,timer:null,ws:null,conflicts:[],retry:1000,error:'',generation:0};
+const CLOUD={ready:false,busy:false,gateToken:'',token:'',base:null,version:null,timer:null,ws:null,conflicts:[],retry:1000,error:'',generation:0};
 const dataKeys=['records','verification','programme','approvals','auditors','auditorEmails','deptManagerEmails','auditees','settings','meta','deleted','log'];
 function cloudIdentity(user){
   const labels={admin:'Admin',auditor:'Auditor',auditee:'PIC'};
@@ -11,6 +11,7 @@ function cloudIdentity(user){
   let badge=document.getElementById('cloudRole');
   if(!badge){badge=document.createElement('span');badge.id='cloudRole';badge.style='margin-left:6px';document.getElementById('userName').after(badge);}
   badge.textContent='· '+labels[user.role];
+  cloudAccountVisibility();
 }
 function cloudData(){
   const s=AuditSyncCore.copy(snapshot());
@@ -105,7 +106,7 @@ async function cloudSync(){
     if(cloudDirty()){clearTimeout(CLOUD.timer);CLOUD.timer=setTimeout(()=>cloudSync(),500);}
   }catch(e){
     CLOUD.error=e.message;cloudStatus('Chưa đồng bộ: '+e.message+' · giữ nguyên dữ liệu trên máy');
-    if(e.status===401){CLOUD.token='';sessionStorage.removeItem('auditToken');}
+    if(e.status===401){CLOUD.token='';sessionStorage.removeItem('auditToken');CURRENT_USER=GUEST();applyUserUI();cloudAccountVisibility();cloudOpenLogin();}
     else if(![400,403,413].includes(e.status)){
       clearTimeout(CLOUD.timer);CLOUD.timer=setTimeout(()=>cloudSync(),CLOUD.retry+Math.random()*400);CLOUD.retry=Math.min(CLOUD.retry*2,30000);
     }
@@ -119,16 +120,25 @@ function cloudSocket(){
 }
 async function cloudLogin(){
   try{
-    const result=await cloudRequest('login',{method:'POST',body:JSON.stringify({id:document.getElementById('loginUser').value.trim(),password:document.getElementById('loginPass').value})});
+    const credentials={id:document.getElementById('loginUser').value.trim(),password:document.getElementById('loginPass').value};
+    if(!CLOUD.gateToken){
+      const result=await cloudRequest('login',{method:'POST',body:JSON.stringify(credentials)});
+      CLOUD.gateToken=result.gateToken;sessionStorage.setItem('auditGateToken',CLOUD.gateToken);
+      document.getElementById('loginPass').value='';await cloudOpenLogin();return;
+    }
+    const result=await cloudRequest('member-login',{method:'POST',headers:{Authorization:'Bearer '+CLOUD.gateToken},body:JSON.stringify(credentials)});
     cloudIdentity(result.user);CLOUD.token=result.token;sessionStorage.setItem('auditToken',CLOUD.token);
     document.getElementById('loginPass').value='';document.getElementById('loginErr').textContent='';document.getElementById('loginOverlay').style.display='none';
     applyUserUI();renderActive();cloudSocket();await cloudSync();
   }catch(e){document.getElementById('loginErr').textContent=e.message;}
 }
-function cloudLogout(){
+async function cloudLogout(full=false){
+  if(CLOUD.busy){toast('Đang đồng bộ, hãy đợi trước khi đổi người dùng.');return;}
+  if(CLOUD.token&&cloudDirty()){await cloudSync();if(cloudDirty()){toast('Cần đồng bộ thay đổi đang chờ trước khi đổi người dùng.');return;}}
   CLOUD.token='';sessionStorage.removeItem('auditToken');CLOUD.ws?.close();CURRENT_USER=GUEST();applyUserUI();
   document.getElementById('cloudRole')?.remove();CH.auditor='';
-  cloudStatus('Đã đăng xuất · dữ liệu trên máy được giữ');
+  if(full){CLOUD.gateToken='';sessionStorage.removeItem('auditGateToken');}
+  cloudAccountVisibility();cloudStatus('Đã kết thúc phiên người dùng · dữ liệu trên máy được giữ');await cloudOpenLogin();
 }
 async function cloudBoot(){
   if(!navigator.locks)throw Error('Cần Chrome, Edge hoặc trình duyệt hỗ trợ Web Locks để tránh ghi đè giữa các tab.');
@@ -162,6 +172,8 @@ async function cloudBoot(){
     document.getElementById('cloudNow').disabled=true;
     return;
   }
+  cloudAccountPanel();
+  CLOUD.gateToken=sessionStorage.getItem('auditGateToken')||'';
   CLOUD.token=sessionStorage.getItem('auditToken')||'';
   if(CLOUD.token){
     try{cloudIdentity((await cloudRequest('me')).user);cloudSocket();}catch{CLOUD.token='';cloudStatus('Cần đăng nhập để đồng bộ · dữ liệu trên máy được giữ');}
@@ -173,5 +185,6 @@ async function cloudBoot(){
   setInterval(()=>cloudSync(),30000);
   navigator.storage?.persist?.().catch(()=>{});
   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  if(!CLOUD.token)await cloudOpenLogin();
   cloudSync();
 }

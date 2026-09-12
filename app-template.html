@@ -179,7 +179,7 @@ table.data tbody tr:nth-child(even){background:var(--bg1)}
     <h2>Đăng nhập</h2>
     <div class="muted" style="font-size:12.5px;margin-bottom:4px">ILD Coffee Vietnam · Chọn tài khoản</div>
     <input id="loginUser" autocomplete="username" placeholder="Mã tài khoản trên Cloudflare">
-    <input id="loginPass" type="password" placeholder="Mật khẩu (mặc định 1234)" autocomplete="off">
+    <input id="loginPass" type="password" placeholder="Mật khẩu" autocomplete="off">
     <button class="btn big" id="loginBtn" style="width:100%;margin-top:6px">Đăng nhập</button>
     <a href="#" id="loginCancelBtn" style="display:block;margin-top:10px;color:var(--muted);font-size:12px">Đóng — dùng ở chế độ User thường</a>
     <div id="loginErr"></div>
@@ -964,7 +964,7 @@ async function persistAll(){
 }
 
 /* ---------- AUTH ---------- */
-function fillLoginUserOptions(){ /* Account IDs are entered directly; no credentials in HTML. */ }
+function fillLoginUserOptions(){ return cloudOpenLogin(); }
 function applyUserUI(){
   const adm=isAdmin();
   const identified=!!(CURRENT_USER && CURRENT_USER.code!=="User");
@@ -3481,7 +3481,7 @@ function wire(){
   // tab clicks
   $$(".tab").forEach(t=> t.addEventListener("click", ()=> switchTab(t.dataset.tab)));
   // login
-  $("#adminLoginBtn").addEventListener("click", e=>{ e.preventDefault(); $("#loginErr").textContent=""; fillLoginUserOptions(); $("#loginUser").value=""; $("#loginPass").value=""; $("#loginOverlay").style.display="flex"; setTimeout(()=>$("#loginUser").focus(),50); });
+  $("#adminLoginBtn").addEventListener("click", e=>{ e.preventDefault(); cloudOpenLogin(); });
   $("#loginUser").addEventListener("change", ()=>{ if($("#loginUser").value) $("#loginPass").focus(); });
   $("#loginCancelBtn").addEventListener("click", e=>{ e.preventDefault(); $("#loginOverlay").style.display="none"; });
   $("#loginBtn").addEventListener("click", doLogin);
