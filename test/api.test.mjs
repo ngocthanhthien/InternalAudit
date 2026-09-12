@@ -59,7 +59,7 @@ test('password change invalidates previously issued member sessions',async()=>{
   sql.prepare('UPDATE members SET revision=revision+1 WHERE id=?').run('admin');
   assert.equal((await worker.fetch(new Request('https://audit.test/api/me',{headers:{Authorization:'Bearer '+token}}),env,{})).status,401);
 });
-test('full QA then member password flow issues only scoped sessions',async()=>{
+test('QA requires password; member selection requires only an active ID after QA',async()=>{
   const {env,sql}=harness();
   const salt=new Uint8Array(16);crypto.getRandomValues(salt);
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode('test-password'),'PBKDF2',false,['deriveBits']);
@@ -68,8 +68,11 @@ test('full QA then member password flow issues only scoped sessions',async()=>{
   sql.prepare('UPDATE users SET password_hash=?').run(stored);sql.prepare('UPDATE members SET password_hash=?').run(stored);
   const call=(path,body,token='')=>worker.fetch(new Request('https://audit.test/api/'+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)}),env,{});
   assert.equal((await call('member-login',{id:'admin',password:'test-password'})).status,401);
+  assert.equal((await call('login',{id:'QA',password:'wrong'})).status,401);
   const gate=await (await call('login',{id:'QA',password:'test-password'})).json();assert.ok(gate.gateToken);assert.equal(gate.token,undefined);
-  assert.equal((await call('member-login',{id:'admin',password:'wrong'},gate.gateToken)).status,401);
-  const member=await (await call('member-login',{id:'admin',password:'test-password'},gate.gateToken)).json();assert.ok(member.token);assert.equal(member.user.admin,true);
+  assert.equal((await call('member-login',{id:'missing'},gate.gateToken)).status,403);
+  const member=await (await call('member-login',{id:'admin'},gate.gateToken)).json();assert.ok(member.token);assert.equal(member.user.admin,true);
   assert.equal((await worker.fetch(new Request('https://audit.test/api/state',{headers:{Authorization:'Bearer '+member.token}}),env,{})).status,200);
+  sql.prepare('UPDATE members SET active=0 WHERE id=?').run('admin');
+  assert.equal((await call('member-login',{id:'admin'},gate.gateToken)).status,403);
 });

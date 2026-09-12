@@ -127,7 +127,8 @@ export default {
         const raw=await request.text();if(raw.length>4096)return json({error:'Request quá lớn'},413);
         const body=JSON.parse(raw);
         const row=await env.DB.prepare('SELECT * FROM members WHERE id=? AND active=1').bind(String(body.id||'').trim()).first();
-        if(!row||!await verifyPassword(String(body.password||''),row.password_hash))return json({error:'Sai tài khoản nội bộ hoặc mật khẩu'},401);
+        // QA is the only password gate; the selected active member supplies the role.
+        if(!row)return json({error:'Tài khoản nội bộ không tồn tại hoặc đã bị khóa'},403);
         const memberToken=await signToken({id:gate.id,kind:'member',memberId:row.id,revision:row.revision,exp:gate.exp},env.AUTH_SECRET);
         return json({token:memberToken,user:{id:row.id,code:row.id,name:row.name,role:row.role,admin:row.role==='admin'}});
       }

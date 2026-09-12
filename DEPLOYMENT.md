@@ -15,3 +15,5 @@ Khóa ký phiên đăng nhập được đặt bằng Cloudflare Worker Secret `
 Đã chuyển sang hai bước đăng nhập và khôi phục Admin, Admin2, QAM cùng 10 username Auditor hiện có. Dữ liệu Personnel hiện chưa có tên PIC; cần bổ sung tên hoặc nhập JSON danh mục cũ để tạo tài khoản Auditee. Nút Đổi người dùng giữ phiên QA, nút Thoát QA kết thúc cả hai lớp.
 
 Lần đầu dùng app: đăng nhập tài khoản quản trị, nhập JSON từ app cũ, kiểm tra số liệu và chờ trạng thái Cloudflare xác nhận trước khi dùng trên máy thứ hai.
+
+Cập nhật 2026-09-13: chỉ QA yêu cầu mật khẩu. Bước 2 chọn người dùng rồi vào; mật khẩu nội bộ đã lưu không còn được dùng để đăng nhập. Quyền vẫn lấy từ tài khoản được chọn.

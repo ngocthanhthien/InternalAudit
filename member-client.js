@@ -5,6 +5,9 @@ async function cloudOpenLogin(){
   document.getElementById('loginErr').textContent='';
   document.getElementById('loginPass').value='';
   document.getElementById('loginPass').placeholder='Mật khẩu';
+  document.getElementById('loginPass').style.display=CLOUD.gateToken?'none':'';
+  document.getElementById('loginPass').disabled=!!CLOUD.gateToken;
+  document.getElementById('loginBtn').textContent=CLOUD.gateToken?'Vào app':'Đăng nhập';
   document.getElementById('loginCancelBtn').style.display='none';
   if(!CLOUD.gateToken){
     box.querySelector('h2').textContent='Bước 1 · Vào app bằng QA';
@@ -13,7 +16,7 @@ async function cloudOpenLogin(){
     document.getElementById('loginUser').replaceWith(input);return;
   }
   box.querySelector('h2').textContent='Bước 2 · Chọn người dùng';
-  box.querySelector('.muted').textContent='Chọn Admin / Auditor / PIC và nhập mật khẩu cũ của người đó.';
+  box.querySelector('.muted').textContent='Chọn người dùng để áp dụng quyền Admin / Auditor / PIC. Không cần nhập thêm mật khẩu.';
   try{
     const result=await cloudRequest('members',{headers:{Authorization:'Bearer '+CLOUD.gateToken}});
     const select=document.createElement('select');select.id='loginUser';
@@ -25,7 +28,7 @@ async function cloudOpenLogin(){
       }
       if(group.children.length)select.append(group);
     }
-    select.onchange=()=>document.getElementById('loginPass').focus();
+    select.onchange=()=>document.getElementById('loginBtn').focus();
     document.getElementById('loginUser').replaceWith(select);
     if(!result.members.length)document.getElementById('loginErr').textContent='Chưa chuyển danh sách tài khoản nội bộ vào database.';
   }catch(e){

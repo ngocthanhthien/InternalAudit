@@ -16,7 +16,7 @@ Bản chuyển đổi từ `ILD-Internal Audit.html`. Frontend: `index.html`. Gi
 
 ## Tài khoản — Admin / Auditor / PIC như app cũ
 
-Đăng nhập hai bước: **QA** chỉ mở danh sách người dùng; tiếp theo chọn **Admin / Auditor / PIC** và nhập mật khẩu của người đó. Token QA không được đọc/ghi dữ liệu đánh giá hoặc quản lý tài khoản. Quyền thực tế lấy từ bảng `members`, không lấy từ tài khoản QA ở bảng `users`. Các phiên đăng nhập từ bản một bước sẽ cần đăng nhập lại.
+Đăng nhập hai bước: **QA** chỉ mở danh sách người dùng; tiếp theo chỉ chọn **Admin / Auditor / PIC** rồi bấm **Vào app**, không nhập mật khẩu lần hai. Người biết mật khẩu QA có thể chọn bất kỳ tài khoản đang hoạt động, kể cả Admin. Token QA không được đọc/ghi dữ liệu đánh giá hoặc quản lý tài khoản. Quyền thực tế lấy từ bảng `members`, không lấy từ tài khoản QA ở bảng `users`. Các phiên đăng nhập từ bản một bước sẽ cần đăng nhập lại.
 
 - `admin`: cấu hình, danh mục, phê duyệt, dữ liệu đánh giá.
 - `auditor` (Auditor): nhập đánh giá/Finding, tạo request Verification, cập nhật Action/PIC/Due Date/Remarks và gửi Pending. Tên auditor được điền sẵn khi đăng nhập. Chỉ Admin sửa nội dung đánh giá đã lưu, phê duyệt, Done, mở lại/xóa dữ liệu và quản lý danh mục.

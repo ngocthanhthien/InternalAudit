@@ -127,7 +127,8 @@ async function cloudLogin(){
       CLOUD.gateToken=result.gateToken;sessionStorage.setItem('auditGateToken',CLOUD.gateToken);
       document.getElementById('loginPass').value='';await cloudOpenLogin();return;
     }
-    const result=await cloudRequest('member-login',{method:'POST',headers:{Authorization:'Bearer '+CLOUD.gateToken},body:JSON.stringify(credentials)});
+    if(!credentials.id)throw Error('Chọn người dùng trước khi vào app.');
+    const result=await cloudRequest('member-login',{method:'POST',headers:{Authorization:'Bearer '+CLOUD.gateToken},body:JSON.stringify({id:credentials.id})});
     cloudIdentity(result.user);CLOUD.token=result.token;sessionStorage.setItem('auditToken',CLOUD.token);
     document.getElementById('loginPass').value='';document.getElementById('loginErr').textContent='';document.getElementById('loginOverlay').style.display='none';
     applyUserUI();renderActive();cloudSocket();await cloudSync();
