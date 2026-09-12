@@ -59,6 +59,7 @@ function cloudConflict(result,remote){
   cloudStatus('Có '+result.conflicts.length+' nội dung xung đột · bản trên máy đã được giữ');
   document.getElementById('cloudResolve').hidden=false;
   document.getElementById('cloudConflictPaths').textContent=result.conflicts.join('\n');
+  toast('Có xung đột dữ liệu. Mở tab Sync để xử lý.');
 }
 async function cloudResolve(preference){
   if(CLOUD.busy||!CLOUD.remote)return;
@@ -150,9 +151,14 @@ async function cloudBoot(){
   if(journal){cloudApply(journal.local);CLOUD.base=journal.base;CLOUD.version=journal.version;}
   else {CLOUD.base=cloudData();CLOUD.version=null;await cloudJournal();}
   CLOUD.ready=true;
-  const panel=document.createElement('div');panel.className='card';panel.style='margin:12px;padding:12px';
-  panel.innerHTML='<strong>Cloudflare Sync</strong> · <span id="cloudStatus" role="status" aria-live="polite">Đã lưu trên máy · chưa đăng nhập</span> <button class="btn sm" id="cloudNow">Đồng bộ ngay</button> <button class="btn sm gray" id="cloudExport">Sao lưu JSON</button> <label class="btn sm gray">Nhập JSON cũ<input type="file" id="cloudImport" accept=".json" hidden></label> <button class="btn sm gray" id="cloudRefresh" hidden>Có dữ liệu mới · cập nhật giao diện</button><details id="cloudResolve" hidden open><summary>Cần chọn cách xử lý xung đột</summary><pre id="cloudConflictPaths" style="white-space:pre-wrap"></pre><button class="btn sm" id="cloudKeepLocal">Giữ bản trên máy cho mục xung đột</button> <button class="btn sm gray" id="cloudKeepRemote">Giữ bản cloud cho mục xung đột</button> <button class="btn sm gray" id="cloudBackupConflict">Tải hai bản để kiểm tra</button></details>';
-  document.body.prepend(panel);
+  const panel=document.createElement('div');panel.className='card';panel.id='cloudSyncPanel';
+  panel.innerHTML=`<h2>🔄 Đồng bộ dữ liệu</h2>
+    <p class="muted" style="margin:4px 0 16px">Dữ liệu được lưu trên máy trước và tự động đồng bộ giữa các thiết bị qua Cloudflare khi có mạng.</p>
+    <div class="hint" style="margin-bottom:16px"><strong>Trạng thái</strong><div id="cloudStatus" role="status" aria-live="polite" style="margin-top:6px">Đã lưu trên máy · chưa đăng nhập</div></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:20px"><button class="btn" id="cloudNow">🔄 Đồng bộ ngay</button><button class="btn gray" id="cloudRefresh" hidden>Cập nhật giao diện từ dữ liệu mới</button></div>
+    <div style="border-top:1px solid var(--line);padding-top:16px"><h3>Sao lưu và chuyển dữ liệu</h3><p class="muted" style="margin:4px 0 12px">Tải bản sao JSON hoặc nhập dữ liệu từ app cũ.</p><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn gray" id="cloudExport">⬇️ Sao lưu JSON</button><label class="btn gray">📂 Nhập JSON cũ<input type="file" id="cloudImport" accept=".json" hidden></label></div></div>
+    <details id="cloudResolve" hidden open style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line)"><summary>Cần chọn cách xử lý xung đột</summary><pre id="cloudConflictPaths" style="white-space:pre-wrap"></pre><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" id="cloudKeepLocal">Giữ bản trên máy cho mục xung đột</button><button class="btn gray" id="cloudKeepRemote">Giữ bản cloud cho mục xung đột</button><button class="btn gray" id="cloudBackupConflict">Tải hai bản để kiểm tra</button></div></details>`;
+  document.getElementById('view-sync').append(panel);
   document.getElementById('cloudNow').onclick=()=>cloudSync();
   document.getElementById('cloudExport').onclick=backupJson;
   document.getElementById('cloudImport').onchange=async e=>{if(e.target.files[0])await restoreJson(e.target.files[0]);e.target.value='';};
@@ -166,7 +172,7 @@ async function cloudBoot(){
     renderActive();document.getElementById('cloudRefresh').hidden=true;
   };
   if(location.hostname==='ngocthanhthien.github.io'){
-    CLOUD.github=true;
+    CLOUD.github=true;switchTab('sync');
     panel.insertAdjacentHTML('afterbegin','<p><strong>App đã chuyển sang Cloudflare.</strong> <a href="https://ild-internal-audit-api.dangthanhbinh53.workers.dev">Mở Internal Audit online</a>. Nếu đã lưu dữ liệu tại địa chỉ GitHub này, hãy bấm <b>Sao lưu JSON</b> trước rồi nhập vào app mới.</p>');
     cloudStatus('Địa chỉ GitHub chỉ dùng để chuyển dữ liệu cũ; đồng bộ online tại Cloudflare.');
     document.getElementById('cloudNow').disabled=true;

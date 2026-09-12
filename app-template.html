@@ -460,20 +460,7 @@ table.data tbody tr:nth-child(even){background:var(--bg1)}
   </div>
 
   <!-- ===== SYNC ===== -->
-  <div class="view" id="view-sync">
-    <div class="card">
-      <h2>🔄 Đồng bộ đa máy</h2>
-      <div class="hint">Dùng chung qua thư mục OneDrive/Google Drive Desktop. Chỉ Chrome/Edge hỗ trợ. Chỉ tài khoản <b>Admin</b> ghi được file tổng. Lần đầu bấm <b>📂 Kết nối</b> vẫn cần tự chọn đúng thư mục (trình duyệt không cho phép trang web tự mở sẵn 1 thư mục cụ thể vì lý do bảo mật) — xem đường dẫn file đang chạy bên dưới để biết chính xác cần chọn thư mục nào; từ lần sau, trình duyệt tự nhớ và mở lại đúng thư mục đó.</div>
-      <div id="syncStatus" class="row" style="margin:8px 0"></div>
-      <div class="row" style="gap:8px">
-        <button class="btn" id="syncConnectBtn">📂 Kết nối thư mục dùng chung</button>
-        <button class="btn gray" id="syncNowBtn">🔄 Đồng bộ ngay</button>
-        <button class="btn gray" id="syncDisconnectBtn">✂️ Ngắt kết nối</button>
-      </div>
-      <label class="row" style="margin-top:10px;gap:6px"><input type="checkbox" id="syncAuto" style="width:auto"> Tự động đồng bộ nền</label>
-      <div class="hint" id="syncInfo" style="margin-top:8px"></div>
-    </div>
-  </div>
+  <div class="view" id="view-sync"></div>
 
   <!-- ===== SETTINGS ===== -->
   <div class="view" id="view-settings">
@@ -3467,13 +3454,8 @@ function renderLog(){
 }
 
 /* ---------- SYNC UI ---------- */
-function renderSync(){
-  renderSyncStatus();
-  $("#syncInfo").textContent="Website và dữ liệu được lưu trên Cloudflare. Lưu trên máy trước, tự gửi khi có mạng. Dùng bảng Cloudflare Sync phía trên để xem trạng thái và xử lý xung đột.";
-  $("#syncAuto").checked=true;$("#syncAuto").disabled=true;
-  $("#syncConnectBtn").disabled=true;$("#syncDisconnectBtn").disabled=true;
-}
-function renderSyncStatus(){const el=$("#syncStatus");if(el)el.textContent=CLOUD.token?"Cloudflare · tự động đồng bộ":"Chưa đăng nhập Cloudflare";}
+function renderSync(){}
+function renderSyncStatus(){}
 /* ============================================================
    EVENTS + BOOT
    ============================================================ */
@@ -3613,11 +3595,7 @@ function wire(){
   $("#restoreFile").addEventListener("change", e=>{ if(e.target.files[0]) restoreJson(e.target.files[0]); e.target.value=""; });
   $("#clearBtn").addEventListener("click", clearAll);
 
-  // sync
-  $("#syncConnectBtn").addEventListener("click", connectSyncFolder);
-  $("#syncNowBtn").addEventListener("click", ()=>doSync(true));
-  $("#syncDisconnectBtn").addEventListener("click", async ()=>{ SYNC.dir=null; await idbSet("syncFolderHandle",null); renderSync(); toast("Đã ngắt kết nối"); });
-  $("#syncAuto").addEventListener("change", async e=>{ SETTINGS.autoSync=e.target.checked; await saveSettings(); if(e.target.checked) doSync(false); });
+  // Cloudflare controls are attached in cloudBoot().
 }
 
 /* --- record detail modal --- */
