@@ -101,6 +101,26 @@ try{
     assert.equal(state.data.programme.length,170);
     console.log('PASS: supplied workbook imports, displays, syncs and exports 170 unique rows; reimport adds no duplicates.');
   }
+  const deleteCheck=await a.page.evaluate(async()=>{
+    const recordsBefore=JSON.stringify(RECORDS);
+    PROGRAMME=[{id:'delete-a',dept:'PRO',func:'A',activity:'A',months:{1:'X'}},{id:'delete-b',dept:'PRO',func:'B',activity:'B',months:{}}];
+    ceFuncF='A';renderChkEdit();openDeleteAllChecklist();
+    document.querySelector('#ceDeletePassword').value='wrong';
+    document.querySelector('#ceDeleteDialog form').requestSubmit();
+    const wrongKept=PROGRAMME.length===2;
+    document.querySelector('#ceDeleteCancel').click();
+    await new Promise(resolve=>setTimeout(resolve,20));
+    const cancelKept=PROGRAMME.length===2;
+    openDeleteAllChecklist();document.querySelector('#ceDeletePassword').value='1234';
+    document.querySelector('#ceDeleteDialog form').requestSubmit();
+    for(let i=0;i<100&&document.querySelector('#ceDeleteDialog');i++)await new Promise(resolve=>setTimeout(resolve,10));
+    await cloudSync();
+    return {wrongKept,cancelKept,count:PROGRAMME.length,recordsKept:recordsBefore===JSON.stringify(RECORDS)};
+  });
+  assert.deepEqual(deleteCheck,{wrongKept:true,cancelKept:true,count:0,recordsKept:true});
+  assert.equal(state.data.programme.length,0);
+  assert.equal(await auditor.page.evaluate(()=>{renderChkEdit();openDeleteAllChecklist();return document.querySelector('#ceDeleteAllBtn').style.display==='none'&&!document.querySelector('#ceDeleteDialog');}),true);
+  console.log('PASS: bulk delete requires correct password and Admin; cancel/wrong password retain rows; clears all filters and preserves reports; mock sync receives empty checklist.');
   await b.page.screenshot({path:new URL('../test-output/browser.png',import.meta.url).pathname.replace(/^\/([A-Z]:)/,'$1'),fullPage:true});
   assert.deepEqual(errors,[]);
   console.log('PASS: two devices, disjoint edits, conflict resolution, offline reload, pending upload, Auditor/PIC identity; no browser errors.');

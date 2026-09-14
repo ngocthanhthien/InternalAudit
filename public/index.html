@@ -394,6 +394,7 @@ table.data tbody tr:nth-child(even){background:var(--bg1)}
       <div class="filterbar">
         <div class="field" style="min-width:200px"><label>Lọc Function</label><select id="ceFunc"></select></div>
         <div class="field"><label>&nbsp;</label><button class="btn gray" id="ceExportBtn">⬇️ Xuất toàn bộ Excel</button></div>
+        <div class="field"><label>&nbsp;</label><button class="btn red" id="ceDeleteAllBtn" style="display:none">🗑️ Xóa toàn bộ Checklist</button></div>
         <div class="field"><label>&nbsp;</label><button class="btn gray" id="ceTemplateBtn">⬇️ Template nhập</button></div>
         <div class="field" id="ceImportField"><label>&nbsp;</label><label class="btn" style="cursor:pointer">⬆️ Nhập Excel<input type="file" id="ceImportFile" accept=".xlsx,.xls" style="display:none"></label></div>
         <div class="field"><label>&nbsp;</label><button class="btn gray" id="ceAddFreqBtn" title="Thêm loại Tần suất mới (VD: Bi-monthly)">➕ Loại tần suất</button></div>
@@ -2641,6 +2642,7 @@ function renderChkEdit(){
   </tr>`).join("") : `<tr><td colspan="${admin?11:10}" class="muted" style="text-align:center;padding:16px">Chưa có chủ điểm nào.</td></tr>`;
   $("#ceTable").innerHTML=`<caption style="text-align:left;padding:8px">Hiển thị ${rows.length} / ${PROGRAMME.length} dòng · Xuất Excel lấy toàn bộ checklist.</caption>`+head+`<tbody>${body}</tbody>`;
   decorateTableSort("ceTable");
+  $("#ceDeleteAllBtn").style.display=admin?"":"none";
   const addCard=$("#ceAddCard"); if(addCard) addCard.style.display=admin?"block":"none";
   const impField=$("#ceImportField"); if(impField) impField.style.display=admin?"":"none";
 }
@@ -2662,6 +2664,34 @@ async function onChkEditClick(e){
   await saveProgramme();
   logAction("Xoá chủ điểm", (row.activity||"")+" ("+row.func+")");
   renderChkEdit(); renderProgramme();
+}
+function openDeleteAllChecklist(){
+  if(!isAdmin()){toast("Chỉ Admin được xóa toàn bộ Checklist");return;}
+  if(!PROGRAMME.length){toast("Checklist đang trống");return;}
+  if(document.getElementById("ceDeleteDialog"))return;
+  const dialog=document.createElement('dialog');dialog.id='ceDeleteDialog';
+  dialog.style.cssText='border:0;border-radius:12px;padding:24px;max-width:460px;width:90%';
+  dialog.innerHTML=`<form><h2>Xóa toàn bộ Checklist</h2><p>Xóa tất cả ${PROGRAMME.length} dòng, kể cả các dòng ngoài bộ lọc. Lịch và phân công tương ứng trong Master Plan cũng bị xóa vì dùng chung dữ liệu Checklist. Báo cáo đánh giá đã lưu vẫn được giữ.</p><p>Thao tác sẽ đồng bộ sang các máy khác.</p><label for="ceDeletePassword">Nhập mật khẩu để xác nhận xóa</label><input id="ceDeletePassword" type="password" autocomplete="off" required style="width:100%;margin:8px 0"><p id="ceDeleteError" role="alert" style="color:#b91c1c"></p><div class="row"><button type="button" class="btn gray" id="ceDeleteCancel">Hủy</button><button type="submit" class="btn red" id="ceDeleteConfirm">Xóa toàn bộ</button></div></form>`;
+  document.body.append(dialog);
+  dialog.addEventListener('close',()=>dialog.remove());
+  dialog.querySelector('#ceDeleteCancel').onclick=()=>dialog.close();
+  dialog.querySelector('form').onsubmit=async e=>{
+    e.preventDefault();
+    const error=dialog.querySelector('#ceDeleteError');
+    if(!isAdmin()){error.textContent='Chỉ Admin được xóa Checklist';return;}
+    const password=dialog.querySelector('#ceDeletePassword');
+    if(password.value!=='1234'){error.textContent='Mật khẩu không đúng. Chưa xóa dữ liệu.';password.value='';password.focus();return;}
+    const button=dialog.querySelector('#ceDeleteConfirm');button.disabled=true;
+    const previous=PROGRAMME;
+    try{
+      PROGRAMME=[];await saveProgramme();
+      ceFuncF='';logAction('Xóa toàn bộ Checklist',previous.length+' dòng');
+      renderChkEdit();renderProgramme();
+      document.getElementById('ceImportReport')?.remove();
+      dialog.close();toast('Đã xóa '+previous.length+' dòng Checklist. Xem trạng thái đồng bộ tại tab Sync.');
+    }catch(err){PROGRAMME=previous;error.textContent='Không thể hoàn tất xóa: '+err.message;button.disabled=false;}
+  };
+  dialog.showModal();dialog.querySelector('#ceDeletePassword').focus();
 }
 async function addFreqType(){
   if(!isAdmin()){ toast("Chỉ Admin/QA thêm loại tần suất"); return; }
@@ -3636,6 +3666,7 @@ function wire(){
   $("#ceTable").addEventListener("click", onChkEditClick);
   $("#ceAddBtn").addEventListener("click", addChkItem);
   $("#ceExportBtn").addEventListener("click", exportChkExcel);
+  $("#ceDeleteAllBtn").addEventListener("click", openDeleteAllChecklist);
   $("#ceTemplateBtn").addEventListener("click", downloadChkTemplate);
   $("#ceImportFile").addEventListener("change", e=>{ if(e.target.files[0]) importChkExcel(e.target.files[0]); e.target.value=""; });
   $("#ceAddFreqBtn").addEventListener("click", addFreqType);
