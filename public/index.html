@@ -1440,6 +1440,48 @@ function repFiltered(){
     return true;
   }).sort((a,b)=>(b.date||"").localeCompare(a.date||"")|| (b.updatedAt||0)-(a.updatedAt||0));
 }
+// Sorting is a view preference; source arrays and record IDs are never reordered.
+const tableSortState={};
+const tableSortColumns={
+  ceTable:[null,'dept','func','section','activity','document','suppInfo','questionnaire','freq','owner'],
+  progTable:['dept','func','section','activity','document','freq',...Array.from({length:12},(_,i)=>'month'+(i+1)),'count','leadAuditor','member1','member2'],
+  reportTable:[null,'date','section','function','dept','description','verifiedBy','target','score','status','pic']
+};
+function tableSortValue(row,key){
+  if(key==='status')return recordStatus(row);
+  if(/^month\d+$/.test(key))return ({X:1,V:2})[row.months?.[key.slice(5)]]??0;
+  if(key==='count')return Object.values(row.months||{}).filter(v=>v==='X'||v==='V').length;
+  return row[key];
+}
+function sortedTableRows(id,rows){
+  const sort=tableSortState[id];if(!sort)return rows;
+  const collator=new Intl.Collator('vi',{numeric:true,sensitivity:'base'});
+  return rows.map((row,index)=>({row,index})).sort((a,b)=>{
+    const av=tableSortValue(a.row,sort.key),bv=tableSortValue(b.row,sort.key);
+    const empty=v=>v==null||String(v).trim()==='';
+    if(empty(av)||empty(bv))return empty(av)&&empty(bv)?a.index-b.index:empty(av)?1:-1;
+    const cmp=['target','score','count'].includes(sort.key)&&Number.isFinite(Number(av))&&Number.isFinite(Number(bv))?Number(av)-Number(bv):collator.compare(String(av),String(bv));
+    return cmp*sort.direction||a.index-b.index;
+  }).map(x=>x.row);
+}
+function decorateTableSort(id){
+  const table=document.getElementById(id),sort=tableSortState[id];
+  table.querySelectorAll('thead th').forEach((th,i)=>{
+    const key=tableSortColumns[id][i];if(!key)return;
+    const label=th.textContent,active=sort?.key===key;
+    th.setAttribute('aria-sort',active?(sort.direction===1?'ascending':'descending'):'none');
+    const button=document.createElement('button');button.type='button';
+    button.style.cssText='font:inherit;color:inherit;background:transparent;border:0;padding:0;cursor:pointer;text-align:inherit;white-space:nowrap';
+    button.textContent=label+(active?(sort.direction===1?' ▲':' ▼'):' ↕');
+    button.title='Bấm để sắp xếp tăng dần / giảm dần / trở về thứ tự ban đầu';
+    button.onclick=()=>{
+      tableSortState[id]=!active?{key,direction:1}:sort.direction===1?{key,direction:-1}:null;
+      if(id==='reportTable'){repState.page=1;renderReport();}else if(id==='progTable')renderProgramme();else renderChkEdit();
+      table.querySelectorAll('thead th')[i]?.querySelector('button')?.focus();
+    };
+    th.replaceChildren(button);
+  });
+}
 function renderReport(){
   fillSelect($("#repYear"),years(),"Tất cả năm",repState.y);
   fillSelect($("#repMonth"),["1","2","3","4","5","6","7","8","9","10","11","12"].map(m=>({v:m,l:"T"+m})),"Cả năm",repState.m);
@@ -1447,7 +1489,7 @@ function renderReport(){
   fillSelect($("#repFunc"),AUDITEE_LIST.map(f=>f.func),"Tất cả Function",repState.fn);
   fillSelect($("#repDept"),depts(),"Tất cả Dept",repState.dept);
   fillSelect($("#repStatus"),["N/A","Open","Pending","Late","Done"],"Tất cả Status",repState.st);
-  const all=repFiltered();
+  const all=sortedTableRows("reportTable",repFiltered());
   const findings=all.filter(isFinding);
   $("#reportKpis").innerHTML=[kpi(all.length,"Dòng",""),kpi(all.length-findings.length,"Tuân thủ","green"),kpi(findings.length,"Finding","amber"),kpi(findings.filter(r=>recordStatus(r)==="Done").length,"Done","blue")].join("");
   const admin=isAdmin();
@@ -1473,6 +1515,7 @@ function renderReport(){
     </tr>`;
   }).join("") : `<tr><td colspan="12" style="text-align:center;color:#999;padding:18px">Không có dòng nào phù hợp.</td></tr>`;
   $("#reportTable").innerHTML=head+`<tbody>${body}</tbody>`;
+  decorateTableSort("reportTable");
   $("#reportPager").innerHTML = pages>1? `<button class="btn sm gray" data-pg="prev" ${repState.page<=1?"disabled":""}>‹ Trước</button><span style="padding:0 10px">Trang ${repState.page}/${pages} · ${all.length} dòng</span><button class="btn sm gray" data-pg="next" ${repState.page>=pages?"disabled":""}>Sau ›</button>` : `<span class="muted">${all.length} dòng</span>`;
 }
 /* ---------- IMPORT / TEMPLATE (Excel via SheetJS) ---------- */
@@ -2551,6 +2594,7 @@ function renderProgramme(){
   let rows=progDeptF? PROGRAMME.filter(x=>x.dept===progDeptF):PROGRAMME;
   if(progMonthF) rows=rows.filter(x=>x.months && (x.months[progMonthF]==="X"||x.months[progMonthF]==="V"));
   const head=`<thead><tr><th style="min-width:52px">Dept</th><th style="min-width:64px">Function</th><th style="min-width:110px">Section</th><th style="min-width:200px;text-align:left">Chủ điểm</th><th style="min-width:170px;text-align:left">Document/SOP</th><th style="min-width:90px">Tần suất</th>${MONTHS.map(m=>`<th style="min-width:26px;text-align:center" title="Tháng ${m}">T${m}</th>`).join("")}<th style="min-width:56px">KH/✓</th>${PROG_AUDITOR_ROLES.map(r=>`<th style="min-width:110px">${r.label}</th>`).join("")}</tr></thead>`;
+  rows=sortedTableRows("progTable",rows);
   let pd=null,pf=null;
   const body=rows.length? rows.map(e=>{
     const sd=e.dept!==pd, sf=(e.dept!==pd||e.func!==pf); pd=e.dept; pf=e.func;
@@ -2559,6 +2603,7 @@ function renderProgramme(){
     return `<tr><td style="font-weight:800;background:${sd?'var(--bg1)':'transparent'}">${sd?esc(e.dept):""}</td><td style="font-weight:700">${sf?esc(e.func):""}</td><td>${e.section?`<span class="tag blue">${esc(e.section)}</span>`:"—"}</td><td style="max-width:220px;text-align:left">${esc(e.activity)}</td><td class="muted" style="max-width:220px;text-align:left;font-size:11.5px;white-space:pre-line">${esc(e.document||"")}</td><td style="text-align:center">${esc(e.freq||"—")}</td>${cells}<td id="pgc_${e.id}">${progCountHtml(e)}</td>${auditorCells}</tr>`;
   }).join("") : `<tr><td colspan="${MONTHS.length+10}" style="text-align:center;color:#999;padding:16px">Chưa có dữ liệu.</td></tr>`;
   $("#progTable").innerHTML=head+`<tbody>${body}</tbody>`;
+  decorateTableSort("progTable");
 }
 function progCount(id){ const e=PROGRAMME.find(x=>x.id===id); if(!e)return; const el=$("#pgc_"+id); if(el) el.innerHTML=progCountHtml(e); }
 /* Danh sách Function riêng của Master Plan (khác AUDITEE_LIST — mã viết tắt từ file Master Plan gốc) */
@@ -2578,6 +2623,7 @@ function renderChkEdit(){
   const nfreq=$("#ceNewFreq"); if(nfreq){ const cur=nfreq.value; nfreq.innerHTML=freqSelectOptions(cur||freqTypesList()[0].name); }
   const addFreqBtn=$("#ceAddFreqBtn"); if(addFreqBtn) addFreqBtn.style.display=admin?"":"none";
   let rows=ceFuncF? PROGRAMME.filter(x=>x.func===ceFuncF):PROGRAMME;
+  rows=sortedTableRows("ceTable",rows);
   const sectionOpts=r=>`<option value="">—</option>`+SECTION_CODES.map(c=>`<option value="${esc(c)}" ${r.section===c?"selected":""}>${esc(c)}</option>`).join("");
   const head=`<thead><tr><th style="width:34px">#</th><th style="min-width:52px">Dept</th><th style="min-width:64px">Function</th><th style="min-width:130px">Section</th><th style="min-width:160px">Chủ điểm</th><th style="min-width:220px">Document/SOP</th><th style="min-width:200px">Supporting Infor.</th><th style="min-width:220px">Questionnaire</th><th style="min-width:90px">Tần suất</th><th style="min-width:110px">Owner</th>${admin?'<th style="width:44px"></th>':''}</tr></thead>`;
   const body=rows.length? rows.map((r,i)=>`<tr data-ceid="${esc(r.id)}">
@@ -2594,6 +2640,7 @@ function renderChkEdit(){
     ${admin?`<td style="text-align:center"><button class="btn sm red" data-cedel="${esc(r.id)}">✕</button></td>`:""}
   </tr>`).join("") : `<tr><td colspan="${admin?11:10}" class="muted" style="text-align:center;padding:16px">Chưa có chủ điểm nào.</td></tr>`;
   $("#ceTable").innerHTML=`<caption style="text-align:left;padding:8px">Hiển thị ${rows.length} / ${PROGRAMME.length} dòng · Xuất Excel lấy toàn bộ checklist.</caption>`+head+`<tbody>${body}</tbody>`;
+  decorateTableSort("ceTable");
   const addCard=$("#ceAddCard"); if(addCard) addCard.style.display=admin?"block":"none";
   const impField=$("#ceImportField"); if(impField) impField.style.display=admin?"":"none";
 }

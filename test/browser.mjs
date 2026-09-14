@@ -63,6 +63,27 @@ try{
   assert.equal(await auditor.page.locator('#cloudRole').textContent(),'· Auditor');
   assert.equal(await pic.page.evaluate(()=>isAdmin()),false);
   assert.equal(await pic.page.locator('#cloudRole').textContent(),'· PIC');
+  const sortCheck=await a.page.evaluate(()=>{
+    const before=JSON.stringify(PROGRAMME);
+    renderChkEdit();renderProgramme();renderReport();
+    for(const id of ['ceTable','progTable','reportTable']){
+      const th=document.querySelector('#'+id+' thead th[aria-sort]');
+      th.querySelector('button').click();
+      if(document.querySelector('#'+id+' thead th[aria-sort]').getAttribute('aria-sort')!=='ascending')throw Error('Missing ascending sort '+id);
+      document.querySelector('#'+id+' thead th[aria-sort] button').click();
+      if(document.querySelector('#'+id+' thead th[aria-sort]').getAttribute('aria-sort')!=='descending')throw Error('Missing descending sort '+id);
+      document.querySelector('#'+id+' thead th[aria-sort] button').click();
+    }
+    tableSortState.reportTable={key:'score',direction:1};
+    const rows=[{score:10},{score:2},{score:''}];
+    const asc=sortedTableRows('reportTable',rows).map(r=>r.score);
+    tableSortState.reportTable.direction=-1;
+    const desc=sortedTableRows('reportTable',rows).map(r=>r.score);
+    tableSortState.reportTable=null;
+    return {unchanged:before===JSON.stringify(PROGRAMME),asc,desc};
+  });
+  assert.equal(sortCheck.unchanged,true);assert.deepEqual(sortCheck.asc,[2,10,'']);assert.deepEqual(sortCheck.desc,[10,2,'']);
+  console.log('PASS: all three tables toggle sorting; numeric sorting and blank placement; source data unchanged.');
   if(process.env.AUDIT_CHECKLIST_FILE){
     const bytes=Array.from(readFileSync(process.env.AUDIT_CHECKLIST_FILE));
     const result=await a.page.evaluate(async bytes=>{
