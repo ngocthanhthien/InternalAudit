@@ -393,7 +393,7 @@ table.data tbody tr:nth-child(even){background:var(--bg1)}
       <div class="hint">Sửa/thêm/xoá chủ điểm dùng cho Master Plan &amp; tab Đánh giá — đổi ở đây phản ánh ngay. Cột <b>Section</b> gắn chủ điểm vào 1 trong 4 mục ở tab Sections. Cột <b>Tần suất</b>: Monthly/Quaterly/Half-year/Yearly hoặc loại tuỳ chỉnh — Admin bấm <b>+ Loại tần suất</b> để bổ sung thêm loại mới kèm số lần tối đa/năm (dùng để cảnh báo vượt tần suất ở Master Plan). Chỉ Admin/QA sửa.</div>
       <div class="filterbar">
         <div class="field" style="min-width:200px"><label>Lọc Function</label><select id="ceFunc"></select></div>
-        <div class="field"><label>&nbsp;</label><button class="btn gray" id="ceExportBtn">⬇️ Xuất Excel</button></div>
+        <div class="field"><label>&nbsp;</label><button class="btn gray" id="ceExportBtn">⬇️ Xuất toàn bộ Excel</button></div>
         <div class="field"><label>&nbsp;</label><button class="btn gray" id="ceTemplateBtn">⬇️ Template nhập</button></div>
         <div class="field" id="ceImportField"><label>&nbsp;</label><label class="btn" style="cursor:pointer">⬆️ Nhập Excel<input type="file" id="ceImportFile" accept=".xlsx,.xls" style="display:none"></label></div>
         <div class="field"><label>&nbsp;</label><button class="btn gray" id="ceAddFreqBtn" title="Thêm loại Tần suất mới (VD: Bi-monthly)">➕ Loại tần suất</button></div>
@@ -2593,7 +2593,7 @@ function renderChkEdit(){
     <td>${admin?`<input data-cek="owner" value="${esc(r.owner||"")}" style="width:100px">`:esc(r.owner||"")}</td>
     ${admin?`<td style="text-align:center"><button class="btn sm red" data-cedel="${esc(r.id)}">✕</button></td>`:""}
   </tr>`).join("") : `<tr><td colspan="${admin?11:10}" class="muted" style="text-align:center;padding:16px">Chưa có chủ điểm nào.</td></tr>`;
-  $("#ceTable").innerHTML=head+body;
+  $("#ceTable").innerHTML=`<caption style="text-align:left;padding:8px">Hiển thị ${rows.length} / ${PROGRAMME.length} dòng · Xuất Excel lấy toàn bộ checklist.</caption>`+head+`<tbody>${body}</tbody>`;
   const addCard=$("#ceAddCard"); if(addCard) addCard.style.display=admin?"block":"none";
   const impField=$("#ceImportField"); if(impField) impField.style.display=admin?"":"none";
 }
@@ -2651,7 +2651,7 @@ function downloadChkTemplate(){
     ["1. Điền dữ liệu vào sheet \"Data\", bắt đầu từ dòng 2 (giữ nguyên hàng tiêu đề)."],
     ["2. Bắt buộc: Dept, Function, Chủ điểm."],
     ["3. Mỗi dòng là 1 chủ điểm (câu hỏi checklist) của 1 Function."],
-    ["4. Nếu Function đã có sẵn đúng Chủ điểm này (không phân biệt hoa/thường) → CẬP NHẬT dòng đó; nếu chưa có → THÊM MỚI."],
+    ["4. Chỉ bỏ dòng trùng đầy đủ 9 cột. Cùng Function và Chủ điểm nhưng khác câu hỏi/tài liệu vẫn là dòng riêng. Nhập lại file không ghi đè dòng cũ; sửa nội dung tại bảng."],
     ["5. Tần suất: Monthly / Quaterly / Half-year / Yearly, hoặc loại tuỳ chỉnh do Admin thêm ở tab Audit Checklist (nút '+ Loại tần suất')."],
     ["6. Questionnaire: nội dung câu hỏi cụ thể Auditor sẽ hỏi/kiểm tra khi Đánh giá."],
     ["7. Supporting Infor.: thông tin hỗ trợ thêm cho chủ điểm (nếu có) — hiển thị ở tab Đánh giá ngay sau Document/SOP."],
@@ -2668,7 +2668,7 @@ function downloadChkTemplate(){
 }
 function exportChkExcel(){
   if(typeof XLSX==="undefined"){ toast("Thư viện Excel chưa tải"); return; }
-  const rows=ceFuncF? PROGRAMME.filter(x=>x.func===ceFuncF):PROGRAMME;
+  const rows=PROGRAMME;
   const data=[CE_COLS].concat(rows.map(r=>[r.dept,r.func,r.section||"",r.activity,r.document||"",r.suppInfo||"",r.questionnaire||"",r.freq||"",r.owner||""]));
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws["!cols"]=CE_COLS.map(c=>({wch: (c==="Questionnaire"||c==="Document/SOP"||c==="Supporting Infor.")?40:16}));
@@ -2677,34 +2677,66 @@ function exportChkExcel(){
   XLSX.writeFile(wb, "ILD_Checklist_"+todayISO()+".xlsx");
   toast("✅ Đã xuất "+rows.length+" chủ điểm");
 }
+// Compare complete checklist content, never only Function + topic: one topic can have many questions.
+const CE_FIELDS=["dept","func","section","activity","document","suppInfo","questionnaire","freq","owner"];
+const ceText=v=>String(v??"").normalize("NFC").replace(/\r\n?/g,"\n").trim();
+const ceKey=row=>JSON.stringify(CE_FIELDS.map(k=>ceText(row[k])));
+function parseChkSheet(ws){
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",range:0,blankrows:true});
+  const norm=v=>ceText(v).toLowerCase();
+  const hidx=rows.findIndex(r=>r.some(v=>norm(v)==="function")&&r.some(v=>norm(v)==="chủ điểm"));
+  if(hidx<0)throw new Error("Không thấy hàng tiêu đề Function / Chủ điểm — dùng đúng template");
+  const header=rows[hidx].map(norm), idx=CE_COLS.map(c=>header.indexOf(norm(c)));
+  const missing=[0,1,3].filter(i=>idx[i]<0).map(i=>CE_COLS[i]);
+  if(missing.length)throw new Error("Thiếu cột: "+missing.join(", "));
+  // Only fill actual Excel merged cells, never guess values for ordinary blank cells.
+  const value=(r,c)=>{
+    if(c<0)return "";
+    const merge=(ws["!merges"]||[]).find(m=>m.s.r>hidx&&r>=m.s.r&&r<=m.e.r&&c>=m.s.c&&c<=m.e.c);
+    return ceText(merge?rows[merge.s.r]?.[merge.s.c]:rows[r]?.[c]);
+  };
+  const result={items:[],invalid:[],blank:0,total:0};
+  for(let r=hidx+1;r<rows.length;r++){
+    const values=idx.map(c=>value(r,c));
+    if(!values.some(Boolean)&&!(rows[r]||[]).some(v=>ceText(v))){result.blank++;continue;}
+    result.total++;
+    const missing=[0,1,3].filter(i=>!values[i]).map(i=>CE_COLS[i]);
+    if(missing.length){result.invalid.push({line:r+1,missing});continue;}
+    const item=Object.fromEntries(CE_FIELDS.map((k,i)=>[k,values[i]]));
+    item.freq=item.freq||"Quaterly";
+    result.items.push(item);
+  }
+  return result;
+}
+function appendChkItems(existing,items){
+  const seen=new Set(existing.map(ceKey)), additions=[];
+  let duplicates=0;
+  for(const item of items){
+    const key=ceKey(item);
+    if(seen.has(key)){duplicates++;continue;}
+    seen.add(key);
+    additions.push({...item,id:uid("m"),auditor:"",months:{}});
+  }
+  return {additions,duplicates};
+}
 async function importChkExcel(file){
-  if(!isAdmin()){ toast("Chỉ Admin/QA nhập checklist"); return; }
-  if(typeof XLSX==="undefined"){ toast("Thư viện Excel chưa tải"); return; }
+  if(!isAdmin()){toast("Chỉ Admin/QA nhập checklist");return;}
+  if(typeof XLSX==="undefined"){toast("Thư viện Excel chưa tải");return;}
   try{
-    const wb=XLSX.read(await file.arrayBuffer(), {cellDates:true});
-    let sheet = wb.SheetNames.includes("Data") ? "Data" : (wb.SheetNames.find(n=>String(n).toLowerCase().indexOf("hướng")<0) || wb.SheetNames[0]);
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheet], {header:1, raw:true, defval:""});
-    let hidx=rows.findIndex(r=> r.map(x=>String(x).trim().toLowerCase()).includes("function"));
-    if(hidx<0){ toast("⚠️ Không thấy cột 'Function' — dùng đúng template"); return; }
-    const header=rows[hidx].map(x=>String(x).trim());
-    const col=name=> header.findIndex(h=>h.toLowerCase()===name.toLowerCase());
-    const idx={}; CE_COLS.forEach(c=> idx[c]=col(c));
-    let added=0, updated=0, skipped=0;
-    for(let i=hidx+1;i<rows.length;i++){
-      const r=rows[i]||[]; const g=name=>{ const c=idx[name]; return c>=0? r[c] : ""; };
-      const gs=name=>{ const v=g(name); return v==null?"":String(v).trim(); };
-      const dept=gs("Dept"), func=gs("Function"), activity=gs("Chủ điểm");
-      if(!dept||!func||!activity){ if(r.join("").trim()!=="") skipped++; continue; }
-      const document=gs("Document/SOP"), suppInfo=gs("Supporting Infor."), questionnaire=gs("Questionnaire"), freq=gs("Tần suất")||"Quaterly", owner=gs("Owner"), section=gs("Section");
-      let row=PROGRAMME.find(x=>x.func.toLowerCase()===func.toLowerCase() && x.activity.toLowerCase()===activity.toLowerCase());
-      if(row){ row.dept=dept; row.document=document; row.suppInfo=suppInfo; row.questionnaire=questionnaire; row.freq=freq; row.owner=owner; row.section=section; updated++; }
-      else{ PROGRAMME.push({ id:uid("m"), dept, func, section, owner, auditor:"", activity, document, suppInfo, questionnaire, freq, months:{} }); added++; }
-    }
-    await saveProgramme();
-    logAction("Nhập Excel Checklist", added+" thêm mới, "+updated+" cập nhật");
-    toast("✅ Đã nhập: "+added+" thêm mới, "+updated+" cập nhật"+(skipped?(" · bỏ qua "+skipped):""));
-    renderChkEdit(); renderProgramme();
-  }catch(e){ toast("Lỗi nhập Excel: "+e.message); }
+    const wb=XLSX.read(await file.arrayBuffer(),{cellDates:true});
+    const sheet=wb.SheetNames.includes("Data")?"Data":(wb.SheetNames.find(n=>!n.toLowerCase().includes("hướng"))||wb.SheetNames[0]);
+    const parsed=parseChkSheet(wb.Sheets[sheet]);
+    const {additions,duplicates}=appendChkItems(PROGRAMME,parsed.items);
+    if(additions.length){PROGRAMME.push(...additions);await saveProgramme();}
+    ceFuncF="";
+    renderChkEdit();renderProgramme();
+    const summary=`Sheet ${sheet}: ${parsed.total} dòng dữ liệu · ${additions.length} thêm mới · ${duplicates} trùng (bỏ qua) · ${parsed.invalid.length} thiếu thông tin · ${parsed.blank} dòng trống. Tổng checklist: ${PROGRAMME.length} dòng.`;
+    logAction("Nhập Excel Checklist",summary);
+    toast(summary);
+    let report=document.getElementById("ceImportReport");
+    if(!report){report=document.createElement("div");report.id="ceImportReport";report.className="hint";document.getElementById("ceTable").before(report);}
+    report.textContent=summary+(parsed.invalid.length?" Các dòng Excel cần sửa: "+parsed.invalid.map(x=>`${x.line} (thiếu ${x.missing.join(", ")})`).join("; "):"");
+  }catch(e){toast("Lỗi nhập Excel: "+e.message);}
 }
 
 /* ---------- SECTIONS ---------- */

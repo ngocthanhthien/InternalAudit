@@ -77,3 +77,10 @@ Truy vấn `SELECT version,created_at,actor FROM versions ORDER BY created_at DE
 - `test/browser.mjs`: hai Chrome context với API giả lập. Cần Playwright và đường dẫn Chrome; có thể đặt biến `AUDIT_PLAYWRIGHT_PATH` chỉ đến package Playwright trên máy kiểm thử.
 
 Tài liệu chính thức: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [WebSocket Durable Objects](https://developers.cloudflare.com/durable-objects/best-practices/websockets/).
+
+### Checklist Excel import fix — 2026-09-14
+- Import compares all nine checklist columns instead of overwriting rows with the same Function/topic. Different questions, sections and documents survive; exact repeats are skipped.
+- Existing rows and their IDs, schedules and assessment links remain intact. Import is additive: use the checklist table to edit existing content.
+- Actual merged Excel cells are supported. The import report shows added/duplicate/invalid/blank counts and physical row numbers for missing required data.
+- Import resets the Function filter. The table displays visible/total counts; Export all Excel includes the entire checklist.
+- Validation: 22 automated tests plus browser import/render/reimport/export/mock-sync of the reported workbook: 175 data rows, 5 exact repeats, 170 unique rows. Previously overwritten questions require reimport from the source workbook.

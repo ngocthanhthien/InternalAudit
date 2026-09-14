@@ -63,6 +63,23 @@ try{
   assert.equal(await auditor.page.locator('#cloudRole').textContent(),'· Auditor');
   assert.equal(await pic.page.evaluate(()=>isAdmin()),false);
   assert.equal(await pic.page.locator('#cloudRole').textContent(),'· PIC');
+  if(process.env.AUDIT_CHECKLIST_FILE){
+    const bytes=Array.from(readFileSync(process.env.AUDIT_CHECKLIST_FILE));
+    const result=await a.page.evaluate(async bytes=>{
+      PROGRAMME=[];ceFuncF='ROA';
+      const file=new File([new Uint8Array(bytes)],'checklist.xlsx');
+      await importChkExcel(file);
+      const count=PROGRAMME.length,visible=document.querySelectorAll('#ceTable tbody tr').length;
+      await importChkExcel(file);
+      let exported=0;XLSX.writeFile=wb=>{exported=parseChkSheet(wb.Sheets.Checklist).items.length;};
+      ceFuncF='ROA';exportChkExcel();
+      await cloudSync();
+      return {count,visible,afterRepeat:PROGRAMME.length,exported,report:document.getElementById('ceImportReport').textContent};
+    },bytes);
+    assert.equal(result.count,170);assert.equal(result.visible,170);assert.equal(result.afterRepeat,170);assert.equal(result.exported,170);
+    assert.equal(state.data.programme.length,170);
+    console.log('PASS: supplied workbook imports, displays, syncs and exports 170 unique rows; reimport adds no duplicates.');
+  }
   await b.page.screenshot({path:new URL('../test-output/browser.png',import.meta.url).pathname.replace(/^\/([A-Z]:)/,'$1'),fullPage:true});
   assert.deepEqual(errors,[]);
   console.log('PASS: two devices, disjoint edits, conflict resolution, offline reload, pending upload, Auditor/PIC identity; no browser errors.');
