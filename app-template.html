@@ -3944,16 +3944,16 @@ async function onProgClick(e){
   }
 }
 async function reloadProgramme(){ if(!isAdmin())return; if(!confirm("Nạp lại toàn bộ Master Plan từ dữ liệu gốc? Ghi đè đánh dấu hiện tại.")) return; PROGRAMME=PROGRAMME_SEED.map(cloneProg); await saveProgramme(); logAction("Nạp lại Master Plan",""); renderProgramme(); }
-const PROG_COLS=["Dept","Function","Chủ điểm"].concat(MONTHS.map(m=>"T"+m)).concat(["Lead Auditor","Auditor M1","Auditor M2"]);
+const PROG_COLS=["Checklist ID",...CE_COLS].concat(MONTHS.map(m=>"T"+m)).concat(["Lead Auditor","Auditor M1","Auditor M2"]);
 function progToAoa(rows){
-  return rows.map(e=>[e.dept,e.func,e.activity].concat(MONTHS.map(m=>e.months[String(m)]||"")).concat([e.leadAuditor||"",e.member1||"",e.member2||""]));
+  return rows.map(e=>[e.id,...CE_FIELDS.map(k=>e[k]||"")].concat(MONTHS.map(m=>e.months?.[String(m)]||"")).concat([e.leadAuditor||"",e.member1||"",e.member2||""]));
 }
 function exportProgrammeExcel(){
   if(typeof XLSX==="undefined"){ toast("Thư viện Excel chưa tải"); return; }
   const rows=progDeptF? PROGRAMME.filter(x=>x.dept===progDeptF):PROGRAMME;
   if(!rows.length){ toast("⚠️ Không có dữ liệu để xuất"); return; }
   const ws=XLSX.utils.aoa_to_sheet([PROG_COLS].concat(progToAoa(rows)));
-  ws["!cols"]=PROG_COLS.map(c=>({wch:c==="Chủ điểm"?30:c.startsWith("T")?4:14}));
+  ws["!cols"]=PROG_COLS.map(c=>({wch:/^T\d+$/.test(c)?5:["Document/SOP","Supporting Infor.","Questionnaire"].includes(c)?45:c==="Chủ điểm"?30:20}));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "MasterPlan");
   XLSX.writeFile(wb, "ILD_MasterPlan_"+todayISO()+".xlsx");
@@ -3963,15 +3963,14 @@ function downloadProgrammeTemplate(){
   if(typeof XLSX==="undefined"){ toast("Thư viện Excel chưa tải"); return; }
   const wb=XLSX.utils.book_new();
   const guide=[["HƯỚNG DẪN NHẬP MASTER PLAN"],[],
-    ["1. Tải trước bằng '⬇️ Xuất Excel' để có đúng danh sách Function + Chủ điểm hiện có, sửa trực tiếp trên file đó rồi nhập lại."],
-    ["2. Chỉ CẬP NHẬT lịch tháng + phân công Auditor cho chủ điểm ĐÃ CÓ SẴN (khớp Function + Chủ điểm) — không thêm chủ điểm mới ở đây (dùng tab Audit Checklist để thêm chủ điểm mới)."],
+    ["1. Sheet Data có toàn bộ Checklist và lịch/phân công hiện tại. Điền T1–T12 và Lead Auditor/Auditor M1/M2 rồi nhập lại."],
+    ["2. Giữ nguyên Checklist ID để cập nhật đúng dòng, kể cả khi cùng Function/Chủ điểm có nhiều câu hỏi. Các cột Dept đến Owner chỉ để đối chiếu; chỉnh tại tab Audit Checklist."],
     ["3. Cột T1-T12: X = Kế hoạch, V = Done, để trống = chưa lên kế hoạch."],
     ["4. Lead Auditor/Auditor M1/M2: đúng tên trong danh sách Auditor ở tab Personnel (để trống = N.A). Tên không khớp sẽ bị bỏ qua, giữ nguyên giá trị cũ."],
-    ["5. Dòng không khớp đúng Function + Chủ điểm sẽ bị bỏ qua."]];
+    ["5. File cũ không có ID chỉ được nhập khi xác định duy nhất một dòng phù hợp. Dòng không tìm thấy hoặc khớp nhiều câu hỏi sẽ được báo để sửa. Không thêm Checklist mới tại đây."]];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(guide), "Hướng dẫn");
-  const ex1=["PRO","ROA","Start up"].concat(MONTHS.map(m=>m===4?"X":"")).concat(["","",""]);
-  const ws=XLSX.utils.aoa_to_sheet([PROG_COLS, ex1]);
-  ws["!cols"]=PROG_COLS.map(c=>({wch:c==="Chủ điểm"?30:c.startsWith("T")?4:14}));
+  const ws=XLSX.utils.aoa_to_sheet([PROG_COLS,...progToAoa(PROGRAMME)]);
+  ws["!cols"]=PROG_COLS.map(c=>({wch:/^T\d+$/.test(c)?5:["Document/SOP","Supporting Infor.","Questionnaire"].includes(c)?45:c==="Chủ điểm"?30:20}));
   XLSX.utils.book_append_sheet(wb, ws, "Data");
   XLSX.writeFile(wb, "ILD_MasterPlan_Template.xlsx");
   toast("✅ Đã tải template nhập");
@@ -3988,22 +3987,32 @@ async function importProgrammeExcel(file){
     const header=rows[hidx].map(x=>String(x).trim());
     const col=name=> header.findIndex(h=>h.toLowerCase()===name.toLowerCase());
     const idx={}; PROG_COLS.forEach(c=> idx[c]=col(c));
-    let updated=0, skipped=0;
+    let updated=0, skipped=0;const issues=[],seen=new Set();
     for(let i=hidx+1;i<rows.length;i++){
       const r=rows[i]||[]; const g=name=>{ const c=idx[name]; return c>=0? r[c] : ""; };
       const gs=name=>{ const v=g(name); return v==null?"":String(v).trim(); };
       const fn=gs("Function"), activity=gs("Chủ điểm");
       if(!fn||!activity){ if(r.join("").trim()!=="") skipped++; continue; }
-      const row=PROGRAMME.find(x=>x.func.toLowerCase()===fn.toLowerCase() && x.activity.toLowerCase()===activity.toLowerCase());
-      if(!row){ skipped++; continue; }
+      const id=gs("Checklist ID");
+      const candidates=id?PROGRAMME.filter(x=>x.id===id):PROGRAMME.filter(x=>
+        ceText(x.func).toLowerCase()===fn.toLowerCase()&&ceText(x.activity).toLowerCase()===activity.toLowerCase()&&
+        CE_COLS.every((label,j)=>idx[label]<0||ceText(x[CE_FIELDS[j]]).toLowerCase()===gs(label).toLowerCase()));
+      if(candidates.length!==1){skipped++;issues.push(`Dòng ${i+1}: ${candidates.length?'khớp nhiều Checklist, hãy tải template mới có ID':'không tìm thấy Checklist'}`);continue;}
+      const row=candidates[0];
+      if(seen.has(row.id)){skipped++;issues.push(`Dòng ${i+1}: trùng Checklist ID trong file`);continue;}
+      seen.add(row.id);row.months=row.months||{};
       MONTHS.forEach(m=>{
-        const v=gs("T"+m).toUpperCase();
-        if(v==="X"||v==="V") row.months[String(m)]=v; else if(v==="") delete row.months[String(m)];
+        if(idx['T'+m]<0)return;
+        const v=gs('T'+m).toUpperCase();
+        if(v==='X'||v==='V'||v==='✓')row.months[String(m)]=v==='✓'?'V':v;
+        else if(v==='')delete row.months[String(m)];
+        else issues.push(`Dòng ${i+1}, T${m}: giá trị không hợp lệ, giữ lịch cũ`);
       });
       PROG_AUDITOR_ROLES.forEach(role=>{
-        const v=gs(role.label);
-        if(!v) row[role.field]="";
-        else if(AUDITOR_LIST.some(a=>a.toLowerCase()===v.toLowerCase())) row[role.field]=AUDITOR_LIST.find(a=>a.toLowerCase()===v.toLowerCase());
+        if(idx[role.label]<0)return;
+        const v=gs(role.label),name=AUDITOR_LIST.find(a=>a.toLowerCase()===v.toLowerCase());
+        if(!v)row[role.field]='';else if(name)row[role.field]=name;
+        else issues.push(`Dòng ${i+1}, ${role.label}: tên không hợp lệ, giữ phân công cũ`);
       });
       updated++;
     }
@@ -4011,6 +4020,9 @@ async function importProgrammeExcel(file){
     logAction("Nhập Excel Master Plan", updated+" cập nhật");
     toast("✅ Đã cập nhật "+updated+" chủ điểm"+(skipped?(" · bỏ qua "+skipped):""));
     renderProgramme();
+    let report=document.getElementById('progImportReport');
+    if(!report){report=document.createElement('div');report.id='progImportReport';report.className='hint';document.getElementById('progTable').before(report);}
+    report.textContent=`Đã cập nhật ${updated} dòng · Bỏ qua ${skipped} dòng. `+issues.join('; ');
   }catch(e){ toast("Lỗi nhập Excel: "+e.message); }
 }
 /* ---------- SOẠN EMAIL PLAN AUDIT THEO THÁNG (Master Plan, gửi tất cả Auditor) ---------- */

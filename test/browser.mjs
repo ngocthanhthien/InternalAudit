@@ -101,6 +101,28 @@ try{
     assert.equal(state.data.programme.length,170);
     console.log('PASS: supplied workbook imports, displays, syncs and exports 170 unique rows; reimport adds no duplicates.');
   }
+  const planCheck=await a.page.evaluate(async()=>{
+    PROGRAMME=[{id:'plan-a',dept:'PRO',func:'ROA',activity:'Topic',questionnaire:'Question A',document:'SOP A',months:{1:'X'},leadAuditor:'Test Auditor'},
+      {id:'plan-b',dept:'PRO',func:'ROA',activity:'Topic',questionnaire:'Question B',document:'SOP B',months:{2:'X'}}];
+    AUDITOR_LIST=['Test Auditor'];
+    let template;XLSX.writeFile=wb=>template=wb;downloadProgrammeTemplate();
+    const rows=XLSX.utils.sheet_to_json(template.Sheets.Data,{header:1,defval:''});
+    const headers=rows[0];
+    const contextOK=rows.length===3&&rows[2][headers.indexOf('Questionnaire')]==='Question B'&&rows[1][headers.indexOf('T1')]==='X';
+    rows[2][headers.indexOf('T3')]='X';rows[2][headers.indexOf('Lead Auditor')]='Test Auditor';
+    rows[2][headers.indexOf('Document/SOP')]='Changed reference should be ignored';
+    const fileFor=data=>{const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(data),'Data');return new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],'plan.xlsx');};
+    await importProgrammeExcel(fileFor(rows));
+    const correctTarget=PROGRAMME[1].months['3']==='X'&&!PROGRAMME[0].months['3']&&PROGRAMME[1].leadAuditor==='Test Auditor'&&PROGRAMME[1].document==='SOP B';
+    const before=JSON.stringify(PROGRAMME);
+    await importProgrammeExcel(fileFor([['Function','Chủ điểm','T1'],['ROA','Topic','V']]));
+    const ambiguousKept=JSON.stringify(PROGRAMME)===before;
+    await importProgrammeExcel(fileFor([['Checklist ID','Function','Chủ điểm','T4'],['plan-a','ROA','Topic','X']]));
+    const missingColumnsKept=PROGRAMME[0].months['1']==='X'&&PROGRAMME[0].months['4']==='X'&&PROGRAMME[0].leadAuditor==='Test Auditor';
+    return {contextOK,correctTarget,ambiguousKept,missingColumnsKept};
+  });
+  assert.deepEqual(planCheck,{contextOK:true,correctTarget:true,ambiguousKept:true,missingColumnsKept:true});
+  console.log('PASS: populated Master Plan template, ID-based import, reference fields preserved, ambiguous legacy rows skipped, absent columns preserved.');
   const deleteCheck=await a.page.evaluate(async()=>{
     const recordsBefore=JSON.stringify(RECORDS);
     PROGRAMME=[{id:'delete-a',dept:'PRO',func:'A',activity:'A',months:{1:'X'}},{id:'delete-b',dept:'PRO',func:'B',activity:'B',months:{}}];
